@@ -48,9 +48,9 @@ short_description: Dall-e 3
 
 ## requirements.txt 
 
-      +torch
-      +diffusers
-      +transformers
-      +gradio
-      +peft
+      torch
+      diffusers
+      transformers
+      gradio
+      peft
 
