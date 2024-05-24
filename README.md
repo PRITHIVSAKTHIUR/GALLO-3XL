@@ -46,9 +46,11 @@ short_description: Dall-e 3
 | ![Image 1](assets/d3.png) | ![Image 2](assets/d4.png) |
 |---------------------------|---------------------------|
 
-## requirements.txt torch
-      diffusers
-      transformers
-      gradio
-      peft
+## requirements.txt 
+
+      +torch
+      +diffusers
+      +transformers
+      +gradio
+      +peft
 
