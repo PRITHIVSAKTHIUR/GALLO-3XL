@@ -11,6 +11,8 @@ license: creativeml-openrail-m
 short_description: Dall-e 3
 ---
 
+![alt text](assets/xc.png)
+
 🚀Check out the configuration reference at https://huggingface.co/docs/hub/spaces-config-reference
 
 🚀Huggingface Spaces : https://huggingface.co/spaces/prithivMLmods/DALLE-2K
