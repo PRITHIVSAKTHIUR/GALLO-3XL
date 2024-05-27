@@ -45,8 +45,10 @@ short_description: Dall-e 3
 
 ## The Images from Dall-e 2k 🍪
 
-| ![Image 1](assets/d3.png) | ![Image 2](assets/d4.png) |
-|---------------------------|---------------------------|
+| ![Image 1](assets/d3.png) | ![Image 2](assets/2.png) |
+|---------------------------|--------------------------|
+| ![Image 3](assets/3.png) | ![Image 4](assets/4.png) |
+
 
 ## requirements.txt 
 
