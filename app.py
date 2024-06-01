@@ -37,12 +37,12 @@ ENABLE_CPU_OFFLOAD = 0
 
 if torch.cuda.is_available():
     pipe = StableDiffusionXLPipeline.from_pretrained(
-        "prithivMLmods/NGC598-StableDiffusion-XL-v2",
+        "your model----goes here",
         torch_dtype=torch.float16,
         use_safetensors=True,
     )
     pipe.scheduler = EulerAncestralDiscreteScheduler.from_config(pipe.scheduler.config)  
-    pipe.load_lora_weights("prithivMLmods/Cartwheel-DallE-3-Lora-Xl-v2", weight_name="dalle-3-xl-lora-v2.safetensors", adapter_name="dalle")
+    pipe.load_lora_weights("weights here-------here------", weight_name="SF-------goes here", adapter_name="dalle")
     pipe.set_adapters("dalle")
     pipe.to("cuda")
 
