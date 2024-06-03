@@ -10,9 +10,9 @@ from PIL import Image
 import spaces
 from typing import Tuple
 import torch
-from diffusers import StableDiffusionXLPipeline, EulerAncestralDiscreteScheduler
+from diffusers import StableCascadeDecoderPipeline, StableCascadePriorPipeline
 
-DESCRIPTION = """# DALL-E 2K"""
+DESCRIPTION = """ """
 
 def save_image(img):
     unique_name = str(uuid.uuid4()) + ".png"
@@ -27,60 +27,35 @@ def randomize_seed_fn(seed: int, randomize_seed: bool) -> int:
 MAX_SEED = np.iinfo(np.int32).max
 
 if not torch.cuda.is_available():
-    DESCRIPTION += "\n<p>Running on CPU 🥶 This demo may not work on CPU.</p>"
-
-MAX_SEED = np.iinfo(np.int32).max
+    DESCRIPTION += "\n<p>Running on CPU, This may not work on CPU.</p>"
 
 USE_TORCH_COMPILE = 0
 ENABLE_CPU_OFFLOAD = 0
 
-
-if torch.cuda.is_available():
-    pipe = StableDiffusionXLPipeline.from_pretrained(
-        "your model----goes here",
-        torch_dtype=torch.float16,
-        use_safetensors=True,
-    )
-    pipe.scheduler = EulerAncestralDiscreteScheduler.from_config(pipe.scheduler.config)  
-    pipe.load_lora_weights("weights here-------here------", weight_name="SF-------goes here", adapter_name="dalle")
-    pipe.set_adapters("dalle")
-    pipe.to("cuda")
-
-
-    
 style_list = [
-    {
-        "name": "(No style)",
-        "prompt": "{prompt}",
-        "negative_prompt": "",
-    },
 
     {
-    "name": "8K",
+    "name": "3840 x 2160",
     "prompt": "hyper-realistic 8K image of {prompt} . ultra-detailed, lifelike, high-resolution, sharp, vibrant colors, photorealistic",
     "negative_prompt": "cartoonish, low resolution, blurry, simplistic, abstract, deformed, ugly",
     },
-
     {
-    "name": "4K",
+    "name": "2560 × 1440",
     "prompt": "hyper-realistic 4K image of {prompt} . ultra-detailed, lifelike, high-resolution, sharp, vibrant colors, photorealistic",
     "negative_prompt": "cartoonish, low resolution, blurry, simplistic, abstract, deformed, ugly",
     },
-
     {
-    "name": "HDR Photography",
+    "name": "HDR",
     "prompt": "HDR photo of {prompt} . high dynamic range, vivid colors, sharp contrast, realistic, detailed, high resolution, professional",
     "negative_prompt": "dull, low contrast, blurry, unrealistic, cartoonish, ugly, deformed",
     },
-
-
     {
         "name": "Cinematic",
         "prompt": "cinematic still {prompt} . emotional, harmonious, vignette, highly detailed, high budget, bokeh, cinemascope, moody, epic, gorgeous, film grain, grainy",
         "negative_prompt": "anime, cartoon, graphic, text, painting, crayon, graphite, abstract, glitch, deformed, mutated, ugly, disfigured",
     },
     {
-        "name": "Photographic",
+        "name": "Photo",
         "prompt": "cinematic photo {prompt} . 35mm photograph, film, bokeh, professional, 4k, highly detailed",
         "negative_prompt": "drawing, painting, crayon, sketch, graphite, impressionist, noisy, blurry, soft, deformed, ugly",
     },
@@ -95,24 +70,9 @@ style_list = [
         "negative_prompt": "ugly, deformed, noisy, blurry, low contrast, realism, photorealistic, Western comic style",
     },
     {
-        "name": "Digital Art",
+        "name": "Digital",
         "prompt": "concept art {prompt} . digital artwork, illustrative, painterly, matte painting, highly detailed",
         "negative_prompt": "photo, photorealistic, realism, ugly",
-    },
-    {
-        "name": "Pixel art",
-        "prompt": "pixel-art {prompt} . low-res, blocky, pixel art style, 8-bit graphics",
-        "negative_prompt": "sloppy, messy, blurry, noisy, highly detailed, ultra textured, photo, realistic",
-    },
-    {
-        "name": "Fantasy art",
-        "prompt": "ethereal fantasy concept art of  {prompt} . magnificent, celestial, ethereal, painterly, epic, majestic, magical, fantasy art, cover art, dreamy",
-        "negative_prompt": "photographic, realistic, realism, 35mm film, dslr, cropped, frame, text, deformed, glitch, noise, noisy, off-center, deformed, cross-eyed, closed eyes, bad anatomy, ugly, disfigured, sloppy, duplicate, mutated, black and white",
-    },
-    {
-        "name": "Neonpunk",
-        "prompt": "neonpunk style {prompt} . cyberpunk, vaporwave, neon, vibes, vibrant, stunningly beautiful, crisp, detailed, sleek, ultramodern, magenta highlights, dark purple shadows, high contrast, cinematic, ultra detailed, intricate, professional",
-        "negative_prompt": "painting, drawing, illustration, glitch, deformed, mutated, cross-eyed, ugly, disfigured",
     },
     {
         "name": "3D Model",
@@ -120,11 +80,16 @@ style_list = [
         "negative_prompt": "ugly, deformed, noisy, low poly, blurry, painting",
     },
 
-    
-]   
+    {
+        "name": "(No style)",
+        "prompt": "{prompt}",
+        "negative_prompt": "",
+    },
+]
+
 styles = {k["name"]: (k["prompt"], k["negative_prompt"]) for k in style_list}
 STYLE_NAMES = list(styles.keys())
-DEFAULT_STYLE_NAME = "(No style)"
+DEFAULT_STYLE_NAME = "3840 x 2160"
 
 def apply_style(style_name: str, positive: str, negative: str = "") -> Tuple[str, str]:
     p, n = styles.get(style_name, styles[DEFAULT_STYLE_NAME])
@@ -133,7 +98,7 @@ def apply_style(style_name: str, positive: str, negative: str = "") -> Tuple[str
     return p.replace("{prompt}", positive), n + negative
 
 @spaces.GPU(enable_queue=True)
-def generate(
+def stab(
     prompt: str,
     negative_prompt: str = "",
     style: str = DEFAULT_STYLE_NAME,
@@ -147,36 +112,48 @@ def generate(
     randomize_seed: bool = False,
     progress=gr.Progress(track_tqdm=True),
 ):
-
-    
     seed = int(randomize_seed_fn(seed, randomize_seed))
 
     if not use_negative_prompt:
-        negative_prompt = ""  # type: ignore
+        negative_prompt = ""
     prompt, negative_prompt = apply_style(style, prompt, negative_prompt)
 
-    images = pipe(
+    prior = StableCascadePriorPipeline.from_pretrained("stabilityai/stable-cascade-prior", variant="bf16", torch_dtype=torch.bfloat16)
+    decoder = StableCascadeDecoderPipeline.from_pretrained("stabilityai/stable-cascade", variant="bf16", torch_dtype=torch.float16)
+
+    prior.enable_model_cpu_offload()
+    prior_output = prior(
+        prompt=prompt,
+        height=height,
+        width=width,
+        negative_prompt=negative_prompt,
+        guidance_scale=guidance_scale,
+        num_images_per_prompt=num_images_per_prompt,
+        num_inference_steps=num_inference_steps
+    )
+
+    decoder.enable_model_cpu_offload()
+    images = decoder(
+        image_embeddings=prior_output.image_embeddings.to(torch.float16),
         prompt=prompt,
         negative_prompt=negative_prompt,
-        width=width,
-        height=height,
-        guidance_scale=guidance_scale,
-        num_inference_steps=num_inference_steps,
-        num_images_per_prompt=num_images_per_prompt,
-        cross_attention_kwargs={"scale": 0.65},
+        guidance_scale=0.0,
         output_type="pil",
+        num_inference_steps=10
     ).images
+
     image_paths = [save_image(img) for img in images]
     print(image_paths)
     return image_paths, seed
 
 examples = [
-    "a time traveler meeting their past self in a Victorian-era street",
-    "a carnival at night with colorful lights and whimsical rides",
-    "a Viking ship sailing through a storm with lightning in the background",
-    "a cyberpunk street market with neon lights and holographic signs",
-    "a space station orbiting a distant planet, serving as a hub for intergalactic travelers",
-    "a surreal landscape with floating islands and waterfalls cascading into the void"
+		
+	"3d image, cute girl, in the style of Pixar --ar 1:2 --stylize 750, 4K resolution highlights, Sharp focus, octane render, ray tracing, Ultra-High-Definition, 8k, UHD, HDR, (Masterpiece:1.5), (best quality:1.5)",
+    "(Pirate ship sailing into a bioluminescence sea with a galaxy in the sky), epic, 4k, ultra, the space scene with planets and stars, in the style of ethereal escapism, richly colored skies, vibrant worlds --ar 8:5",
+    "Thin burger, realistic photo (without tomato or any other ingredient), smoky flavor, 4K resolution highlights every texture, providing an incredible and appetizing visual experience",
+    "A galaxy with blue water, a red star and many planets in one view, in the style of digital fantasy nebulae and cosmos, light black and violet, realistic nebulae paintings, james paick, steve henderson, ue5, cosmic horror --ar 8:5",
+    "A dark night sky with thick, dense clouds and stars in the background. The main focus is on one of these large cloud formations that has been stylized to resemble an ancient dragon. There's no moon or other celestial bodies visible in the sky. This scene conveys mystery and magic, with the dark blue glow from distant galaxies adding depth and contrast to the night landscape. --ar 8:5 --v 5.2 --style raw"
+
 ]
 
 css = '''
@@ -186,6 +163,7 @@ footer {
     visibility: hidden
 }
 '''
+
 with gr.Blocks(css=css, theme="xiaobaiyuan/theme_brief") as demo:
     gr.Markdown(DESCRIPTION)
     gr.DuplicateButton(
@@ -206,13 +184,14 @@ with gr.Blocks(css=css, theme="xiaobaiyuan/theme_brief") as demo:
             run_button = gr.Button("Run")
         result = gr.Gallery(label="Result", columns=1, preview=True)
     with gr.Accordion("Advanced options", open=False):
-        use_negative_prompt = gr.Checkbox(label="Use negative prompt", value=False, visible=True)
+        use_negative_prompt = gr.Checkbox(label="Use negative prompt", value=True, visible=True)
         negative_prompt = gr.Text(
-                label="Negative prompt",
-                max_lines=1,
-                placeholder="Enter a negative prompt",
-                visible=True,
-            )
+            label="Negative prompt",
+            max_lines=1,
+            placeholder="Enter a negative prompt",
+            value="(deformed, distorted, disfigured:1.3), poorly drawn, bad anatomy, wrong anatomy, extra limb, missing limb, floating limbs, (mutated hands and fingers:1.4), disconnected limbs, mutation, mutated, ugly, disgusting, blurry, amputation, NSFW",
+            visible=True,
+        )
         with gr.Row():
             num_inference_steps = gr.Slider(
                 label="Steps",
@@ -262,21 +241,20 @@ with gr.Blocks(css=css, theme="xiaobaiyuan/theme_brief") as demo:
                 value=6,
             )
     with gr.Row(visible=True):
-            style_selection = gr.Radio(
-                show_label=True,
-                container=True,
-                interactive=True,
-                choices=STYLE_NAMES,
-                value=DEFAULT_STYLE_NAME,
-                label="Image Style",
-            )
-        
+        style_selection = gr.Radio(
+            show_label=True,
+            container=True,
+            interactive=True,
+            choices=STYLE_NAMES,
+            value=DEFAULT_STYLE_NAME,
+            label="Image Style",
+        )
 
     gr.Examples(
         examples=examples,
         inputs=prompt,
         outputs=[result, seed],
-        fn=generate,
+        fn=stab,
         cache_examples=False,
     )
 
@@ -286,7 +264,6 @@ with gr.Blocks(css=css, theme="xiaobaiyuan/theme_brief") as demo:
         outputs=negative_prompt,
         api_name=False,
     )
-    
 
     gr.on(
         triggers=[
@@ -294,7 +271,7 @@ with gr.Blocks(css=css, theme="xiaobaiyuan/theme_brief") as demo:
             negative_prompt.submit,
             run_button.click,
         ],
-        fn=generate,
+        fn=stab,
         inputs=[
             prompt,
             negative_prompt,
@@ -311,6 +288,6 @@ with gr.Blocks(css=css, theme="xiaobaiyuan/theme_brief") as demo:
         outputs=[result, seed],
         api_name="run",
     )
-    
+
 if __name__ == "__main__":
-    demo.queue(max_size=20).launch(show_api=False, debug=False)
+    demo.queue(max_size=20).launch(show_api=False, debug=False, share=True)
