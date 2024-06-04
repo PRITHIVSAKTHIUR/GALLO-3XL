@@ -3,16 +3,123 @@
 import os
 import random
 import uuid
+import json
 
 import gradio as gr
 import numpy as np
 from PIL import Image
 import spaces
-from typing import Tuple
 import torch
-from diffusers import StableCascadeDecoderPipeline, StableCascadePriorPipeline
+from diffusers import DiffusionPipeline
+from typing import Tuple
 
-DESCRIPTION = """ """
+#Check for the Model Base..//
+
+
+
+bad_words = json.loads(os.getenv('BAD_WORDS', "[]"))
+bad_words_negative = json.loads(os.getenv('BAD_WORDS_NEGATIVE', "[]"))
+default_negative = os.getenv("default_negative","")
+
+def check_text(prompt, negative=""):
+    for i in bad_words:
+        if i in prompt:
+            return True
+    for i in bad_words_negative:
+        if i in negative:
+            return True
+    return False
+
+
+
+style_list = [
+
+    {
+        "name": "2560 x 1440",
+        "prompt": "hyper-realistic 4K image of {prompt}. ultra-detailed, lifelike, high-resolution, sharp, vibrant colors, photorealistic",
+        "negative_prompt": "cartoonish, low resolution, blurry, simplistic, abstract, deformed, ugly",
+    },
+
+    {
+        "name": "Photo",
+        "prompt": "cinematic photo {prompt}. 35mm photograph, film, bokeh, professional, 4k, highly detailed",
+        "negative_prompt": "drawing, painting, crayon, sketch, graphite, impressionist, noisy, blurry, soft, deformed, ugly",
+    },   
+
+    {
+        "name": "Cinematic",
+        "prompt": "cinematic still {prompt}. emotional, harmonious, vignette, highly detailed, high budget, bokeh, cinemascope, moody, epic, gorgeous, film grain, grainy",
+        "negative_prompt": "anime, cartoon, graphic, text, painting, crayon, graphite, abstract, glitch, deformed, mutated, ugly, disfigured",
+    },
+
+    {
+        "name": "Anime",
+        "prompt": "anime artwork {prompt}. anime style, key visual, vibrant, studio anime, highly detailed",
+        "negative_prompt": "photo, deformed, black and white, realism, disfigured, low contrast",
+    },
+    {
+        "name": "3D Model",
+        "prompt": "professional 3d model {prompt}. octane render, highly detailed, volumetric, dramatic lighting",
+        "negative_prompt": "ugly, deformed, noisy, low poly, blurry, painting",
+    },
+    {
+        "name": "(No style)",
+        "prompt": "{prompt}",
+        "negative_prompt": "",
+    },
+]
+
+styles = {k["name"]: (k["prompt"], k["negative_prompt"]) for k in style_list}
+STYLE_NAMES = list(styles.keys())
+DEFAULT_STYLE_NAME = "2560 x 1440"
+
+def apply_style(style_name: str, positive: str, negative: str = "") -> Tuple[str, str]:
+    p, n = styles.get(style_name, styles[DEFAULT_STYLE_NAME])
+    if not negative:
+        negative = ""
+    return p.replace("{prompt}", positive), n + negative
+
+DESCRIPTION = """"""
+if not torch.cuda.is_available():
+    DESCRIPTION += "\n<p>⚠️Running on CPU, This may not work on CPU.</p>"
+
+MAX_SEED = np.iinfo(np.int32).max
+CACHE_EXAMPLES = torch.cuda.is_available() and os.getenv("CACHE_EXAMPLES", "0") == "1"
+MAX_IMAGE_SIZE = int(os.getenv("MAX_IMAGE_SIZE", "2048"))
+USE_TORCH_COMPILE = os.getenv("USE_TORCH_COMPILE", "0") == "1"
+ENABLE_CPU_OFFLOAD = os.getenv("ENABLE_CPU_OFFLOAD", "0") == "1"
+
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+NUM_IMAGES_PER_PROMPT = 1
+
+if torch.cuda.is_available():
+    pipe = DiffusionPipeline.from_pretrained(
+        "-----Pipeline--Goes-- Here",
+        torch_dtype=torch.float16,
+        use_safetensors=True,
+        add_watermarker=False,
+        variant="fp16"
+    )
+    pipe2 = DiffusionPipeline.from_pretrained(
+        "-----Pipeline--Goes-- Here",
+        torch_dtype=torch.float16,
+        use_safetensors=True,
+        add_watermarker=False,
+        variant="fp16"
+    )
+    if ENABLE_CPU_OFFLOAD:
+        pipe.enable_model_cpu_offload()
+        pipe2.enable_model_cpu_offload()
+    else:
+        pipe.to(device)    
+        pipe2.to(device)    
+        print("Loaded on Device!")
+    
+    if USE_TORCH_COMPILE:
+        pipe.unet = torch.compile(pipe.unet, mode="reduce-overhead", fullgraph=True)
+        pipe2.unet = torch.compile(pipe2.unet, mode="reduce-overhead", fullgraph=True)
+        print("Model Compiled!")
 
 def save_image(img):
     unique_name = str(uuid.uuid4()) + ".png"
@@ -24,154 +131,67 @@ def randomize_seed_fn(seed: int, randomize_seed: bool) -> int:
         seed = random.randint(0, MAX_SEED)
     return seed
 
-MAX_SEED = np.iinfo(np.int32).max
-
-if not torch.cuda.is_available():
-    DESCRIPTION += "\n<p>Running on CPU, This may not work on CPU.</p>"
-
-USE_TORCH_COMPILE = 0
-ENABLE_CPU_OFFLOAD = 0
-
-style_list = [
-
-    {
-    "name": "3840 x 2160",
-    "prompt": "hyper-realistic 8K image of {prompt} . ultra-detailed, lifelike, high-resolution, sharp, vibrant colors, photorealistic",
-    "negative_prompt": "cartoonish, low resolution, blurry, simplistic, abstract, deformed, ugly",
-    },
-    {
-    "name": "2560 × 1440",
-    "prompt": "hyper-realistic 4K image of {prompt} . ultra-detailed, lifelike, high-resolution, sharp, vibrant colors, photorealistic",
-    "negative_prompt": "cartoonish, low resolution, blurry, simplistic, abstract, deformed, ugly",
-    },
-    {
-    "name": "HDR",
-    "prompt": "HDR photo of {prompt} . high dynamic range, vivid colors, sharp contrast, realistic, detailed, high resolution, professional",
-    "negative_prompt": "dull, low contrast, blurry, unrealistic, cartoonish, ugly, deformed",
-    },
-    {
-        "name": "Cinematic",
-        "prompt": "cinematic still {prompt} . emotional, harmonious, vignette, highly detailed, high budget, bokeh, cinemascope, moody, epic, gorgeous, film grain, grainy",
-        "negative_prompt": "anime, cartoon, graphic, text, painting, crayon, graphite, abstract, glitch, deformed, mutated, ugly, disfigured",
-    },
-    {
-        "name": "Photo",
-        "prompt": "cinematic photo {prompt} . 35mm photograph, film, bokeh, professional, 4k, highly detailed",
-        "negative_prompt": "drawing, painting, crayon, sketch, graphite, impressionist, noisy, blurry, soft, deformed, ugly",
-    },
-    {
-        "name": "Anime",
-        "prompt": "anime artwork {prompt} . anime style, key visual, vibrant, studio anime,  highly detailed",
-        "negative_prompt": "photo, deformed, black and white, realism, disfigured, low contrast",
-    },
-    {
-        "name": "Manga",
-        "prompt": "manga style {prompt} . vibrant, high-energy, detailed, iconic, Japanese comic style",
-        "negative_prompt": "ugly, deformed, noisy, blurry, low contrast, realism, photorealistic, Western comic style",
-    },
-    {
-        "name": "Digital",
-        "prompt": "concept art {prompt} . digital artwork, illustrative, painterly, matte painting, highly detailed",
-        "negative_prompt": "photo, photorealistic, realism, ugly",
-    },
-    {
-        "name": "3D Model",
-        "prompt": "professional 3d model {prompt} . octane render, highly detailed, volumetric, dramatic lighting",
-        "negative_prompt": "ugly, deformed, noisy, low poly, blurry, painting",
-    },
-
-    {
-        "name": "(No style)",
-        "prompt": "{prompt}",
-        "negative_prompt": "",
-    },
-]
-
-styles = {k["name"]: (k["prompt"], k["negative_prompt"]) for k in style_list}
-STYLE_NAMES = list(styles.keys())
-DEFAULT_STYLE_NAME = "3840 x 2160"
-
-def apply_style(style_name: str, positive: str, negative: str = "") -> Tuple[str, str]:
-    p, n = styles.get(style_name, styles[DEFAULT_STYLE_NAME])
-    if not negative:
-        negative = ""
-    return p.replace("{prompt}", positive), n + negative
-
 @spaces.GPU(enable_queue=True)
-def stab(
+def generate(
     prompt: str,
     negative_prompt: str = "",
-    style: str = DEFAULT_STYLE_NAME,
     use_negative_prompt: bool = False,
-    num_inference_steps: int = 30,
-    num_images_per_prompt: int = 2,
+    style: str = DEFAULT_STYLE_NAME,
     seed: int = 0,
     width: int = 1024,
     height: int = 1024,
     guidance_scale: float = 3,
     randomize_seed: bool = False,
+    use_resolution_binning: bool = True,
     progress=gr.Progress(track_tqdm=True),
 ):
+    if check_text(prompt, negative_prompt):
+        raise ValueError("Prompt contains restricted words.")
+    
+    prompt, negative_prompt = apply_style(style, prompt, negative_prompt)
     seed = int(randomize_seed_fn(seed, randomize_seed))
+    generator = torch.Generator().manual_seed(seed)
 
     if not use_negative_prompt:
-        negative_prompt = ""
-    prompt, negative_prompt = apply_style(style, prompt, negative_prompt)
+        negative_prompt = ""  # type: ignore
+    negative_prompt += default_negative    
 
-    prior = StableCascadePriorPipeline.from_pretrained("stabilityai/stable-cascade-prior", variant="bf16", torch_dtype=torch.bfloat16)
-    decoder = StableCascadeDecoderPipeline.from_pretrained("stabilityai/stable-cascade", variant="bf16", torch_dtype=torch.float16)
-
-    prior.enable_model_cpu_offload()
-    prior_output = prior(
-        prompt=prompt,
-        height=height,
-        width=width,
-        negative_prompt=negative_prompt,
-        guidance_scale=guidance_scale,
-        num_images_per_prompt=num_images_per_prompt,
-        num_inference_steps=num_inference_steps
-    )
-
-    decoder.enable_model_cpu_offload()
-    images = decoder(
-        image_embeddings=prior_output.image_embeddings.to(torch.float16),
-        prompt=prompt,
-        negative_prompt=negative_prompt,
-        guidance_scale=0.0,
-        output_type="pil",
-        num_inference_steps=10
-    ).images
+    options = {
+        "prompt": prompt,
+        "negative_prompt": negative_prompt,
+        "width": width,
+        "height": height,
+        "guidance_scale": guidance_scale,
+        "num_inference_steps": 25,
+        "generator": generator,
+        "num_images_per_prompt": NUM_IMAGES_PER_PROMPT,
+        "use_resolution_binning": use_resolution_binning,
+        "output_type": "pil",
+    }
+    
+    images = pipe(**options).images + pipe2(**options).images
 
     image_paths = [save_image(img) for img in images]
-    print(image_paths)
     return image_paths, seed
 
 examples = [
-		
-	"3d image, cute girl, in the style of Pixar --ar 1:2 --stylize 750, 4K resolution highlights, Sharp focus, octane render, ray tracing, Ultra-High-Definition, 8k, UHD, HDR, (Masterpiece:1.5), (best quality:1.5)",
-    "(Pirate ship sailing into a bioluminescence sea with a galaxy in the sky), epic, 4k, ultra, the space scene with planets and stars, in the style of ethereal escapism, richly colored skies, vibrant worlds --ar 8:5",
-    "Thin burger, realistic photo (without tomato or any other ingredient), smoky flavor, 4K resolution highlights every texture, providing an incredible and appetizing visual experience",
-    "A galaxy with blue water, a red star and many planets in one view, in the style of digital fantasy nebulae and cosmos, light black and violet, realistic nebulae paintings, james paick, steve henderson, ue5, cosmic horror --ar 8:5",
-    "A dark night sky with thick, dense clouds and stars in the background. The main focus is on one of these large cloud formations that has been stylized to resemble an ancient dragon. There's no moon or other celestial bodies visible in the sky. This scene conveys mystery and magic, with the dark blue glow from distant galaxies adding depth and contrast to the night landscape. --ar 8:5 --v 5.2 --style raw"
-
+    "A closeup of a cat, a window, in a rustic cabin, close up, with a shallow depth of field, with a vintage film grain, in the style of Annie Leibovitz and in the style of Wes Anderson. --ar 85:128 --v 6.0 --style raw",
+    "Daria Morgendorffer the main character of the animated series Daria, serious expression, very excites sultry look, so hot girl, beautiful charismatic girl, so hot shot, a woman wearing eye glasses, gorgeous figure, interesting shapes, life-size figures",
+    "Dark green large leaves of anthurium, close up, photography, aerial view, in the style of unsplash, hasselblad h6d400c  --ar 85:128 --v 6.0 --style raw",
+    "Closeup of blonde woman depth of field, bokeh, shallow focus, minimalism, fujifilm xh2s with Canon EF lens, cinematic --ar 85:128 --v 6.0 --style raw"
 ]
 
 css = '''
 .gradio-container{max-width: 560px !important}
 h1{text-align:center}
-footer {
-    visibility: hidden
-}
 '''
-
 with gr.Blocks(css=css, theme="xiaobaiyuan/theme_brief") as demo:
     gr.Markdown(DESCRIPTION)
     gr.DuplicateButton(
         value="Duplicate Space for private use",
         elem_id="duplicate-button",
-        visible=False,
+        visible=os.getenv("SHOW_DUPLICATE_BUTTON") == "1",
     )
-
     with gr.Group():
         with gr.Row():
             prompt = gr.Text(
@@ -189,7 +209,7 @@ with gr.Blocks(css=css, theme="xiaobaiyuan/theme_brief") as demo:
             label="Negative prompt",
             max_lines=1,
             placeholder="Enter a negative prompt",
-            value="(deformed, distorted, disfigured:1.3), poorly drawn, bad anatomy, wrong anatomy, extra limb, missing limb, floating limbs, (mutated hands and fingers:1.4), disconnected limbs, mutation, mutated, ugly, disgusting, blurry, amputation, NSFW",
+            value="(deformed iris, deformed pupils, semi-realistic, cgi, 3d, render, sketch, cartoon, drawing, anime:1.4), text, close up, cropped, out of frame, worst quality, low quality, jpeg artifacts, ugly, duplicate, morbid, mutilated, extra fingers, mutated hands, poorly drawn hands, poorly drawn face, mutation, deformed, blurry, dehydrated, bad anatomy, bad proportions, extra limbs, cloned face, disfigured, gross proportions, malformed limbs, missing arms, missing legs, extra arms, extra legs, fused fingers, too many fingers, long neck",
             visible=True,
         )
         with gr.Row():
@@ -249,13 +269,12 @@ with gr.Blocks(css=css, theme="xiaobaiyuan/theme_brief") as demo:
             value=DEFAULT_STYLE_NAME,
             label="Image Style",
         )
-
     gr.Examples(
         examples=examples,
         inputs=prompt,
         outputs=[result, seed],
-        fn=stab,
-        cache_examples=False,
+        fn=generate,
+        cache_examples=CACHE_EXAMPLES,
     )
 
     use_negative_prompt.change(
@@ -271,14 +290,12 @@ with gr.Blocks(css=css, theme="xiaobaiyuan/theme_brief") as demo:
             negative_prompt.submit,
             run_button.click,
         ],
-        fn=stab,
+        fn=generate,
         inputs=[
             prompt,
             negative_prompt,
-            style_selection,
             use_negative_prompt,
-            num_inference_steps,
-            num_images_per_prompt,
+            style_selection,
             seed,
             width,
             height,
@@ -290,4 +307,4 @@ with gr.Blocks(css=css, theme="xiaobaiyuan/theme_brief") as demo:
     )
 
 if __name__ == "__main__":
-    demo.queue(max_size=20).launch(show_api=False, debug=False, share=True)
+    demo.queue(max_size=20).launch()
