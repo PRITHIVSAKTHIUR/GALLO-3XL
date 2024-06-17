@@ -15,18 +15,18 @@ short_description: Dall-e 3
 
 🚀Check out the configuration reference at https://huggingface.co/docs/hub/spaces-config-reference
 
-🚀Huggingface Spaces : https://huggingface.co/spaces/prithivMLmods/DALLE-2K
+🚀Huggingface Spaces : https://huggingface.co/spaces/prithivMLmods/DALLE-4K
 
 🚀Docs for Space : 
     
     # Make sure you have git-lfs installed (https://git-lfs.com)
     git lfs install
     
-    git clone https://huggingface.co/spaces/prithivMLmods/DALLE-2K
+    git clone https://huggingface.co/spaces/prithivMLmods/DALLE-4K
     
     # If you want to clone without large files - just their pointers
     
-    GIT_LFS_SKIP_SMUDGE=1 git clone https://huggingface.co/spaces/prithivMLmods/DALLE-2K
+    GIT_LFS_SKIP_SMUDGE=1 git clone https://huggingface.co/spaces/prithivMLmods/DALLE-4K
 
 
 ## 🔮Input Prompt for Image Generation
