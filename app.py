@@ -1,25 +1,24 @@
 #!/usr/bin/env python
-
+#patch 0.04
+#Func()   
+#Pruned Dalle4K Space 
 import os
 import random
 import uuid
 import json
-
 import gradio as gr
 import numpy as np
 from PIL import Image
 import spaces
 import torch
-from diffusers import DiffusionPipeline
+from diffusers import DiffusionPipeline, StableDiffusionXLPipeline, KDPM2AncestralDiscreteScheduler, AutoencoderKL
 from typing import Tuple
 
-#Check for the Model Base..//
-
-
+# Check for the Model Base..
 
 bad_words = json.loads(os.getenv('BAD_WORDS', "[]"))
 bad_words_negative = json.loads(os.getenv('BAD_WORDS_NEGATIVE', "[]"))
-default_negative = os.getenv("default_negative","")
+default_negative = os.getenv("default_negative", "")
 
 def check_text(prompt, negative=""):
     for i in bad_words:
@@ -31,27 +30,23 @@ def check_text(prompt, negative=""):
     return False
 
 
+DESCRIPTIONx = """
 
+## GALLO 3XL 🏜️
+
+Caution: This space consumes a high amount of GPU resources and may lead to the depletion of your GPU quota.
+"""
 style_list = [
-
     {
-        "name": "2560 x 1440",
-        "prompt": "hyper-realistic 4K image of {prompt}. ultra-detailed, lifelike, high-resolution, sharp, vibrant colors, photorealistic",
+        "name": "3840 x 2160",
+        "prompt": "hyper-realistic 8K image of {prompt}. ultra-detailed, lifelike, high-resolution, sharp, vibrant colors, photorealistic",
         "negative_prompt": "cartoonish, low resolution, blurry, simplistic, abstract, deformed, ugly",
-    },
-
-    {
-        "name": "Photo",
-        "prompt": "cinematic photo {prompt}. 35mm photograph, film, bokeh, professional, 4k, highly detailed",
-        "negative_prompt": "drawing, painting, crayon, sketch, graphite, impressionist, noisy, blurry, soft, deformed, ugly",
-    },   
-
+    },  
     {
         "name": "Cinematic",
         "prompt": "cinematic still {prompt}. emotional, harmonious, vignette, highly detailed, high budget, bokeh, cinemascope, moody, epic, gorgeous, film grain, grainy",
         "negative_prompt": "anime, cartoon, graphic, text, painting, crayon, graphite, abstract, glitch, deformed, mutated, ugly, disfigured",
     },
-
     {
         "name": "Anime",
         "prompt": "anime artwork {prompt}. anime style, key visual, vibrant, studio anime, highly detailed",
@@ -71,7 +66,7 @@ style_list = [
 
 styles = {k["name"]: (k["prompt"], k["negative_prompt"]) for k in style_list}
 STYLE_NAMES = list(styles.keys())
-DEFAULT_STYLE_NAME = "2560 x 1440"
+DEFAULT_STYLE_NAME = "3840 x 2160"
 
 def apply_style(style_name: str, positive: str, negative: str = "") -> Tuple[str, str]:
     p, n = styles.get(style_name, styles[DEFAULT_STYLE_NAME])
@@ -85,7 +80,7 @@ if not torch.cuda.is_available():
 
 MAX_SEED = np.iinfo(np.int32).max
 CACHE_EXAMPLES = torch.cuda.is_available() and os.getenv("CACHE_EXAMPLES", "0") == "1"
-MAX_IMAGE_SIZE = int(os.getenv("MAX_IMAGE_SIZE", "2048"))
+MAX_IMAGE_SIZE = int(os.getenv("MAX_IMAGE_SIZE", "4096"))
 USE_TORCH_COMPILE = os.getenv("USE_TORCH_COMPILE", "0") == "1"
 ENABLE_CPU_OFFLOAD = os.getenv("ENABLE_CPU_OFFLOAD", "0") == "1"
 
@@ -95,30 +90,38 @@ NUM_IMAGES_PER_PROMPT = 1
 
 if torch.cuda.is_available():
     pipe = DiffusionPipeline.from_pretrained(
-        "-----Pipeline--Goes-- Here",
+        "SG161222/RealVisXL_V4.0",
         torch_dtype=torch.float16,
         use_safetensors=True,
         add_watermarker=False,
-        variant="fp16"
     )
-    pipe2 = DiffusionPipeline.from_pretrained(
-        "-----Pipeline--Goes-- Here",
+    pipe2 = StableDiffusionXLPipeline.from_pretrained(
+        "Corcelio/mobius",
         torch_dtype=torch.float16,
         use_safetensors=True,
         add_watermarker=False,
-        variant="fp16"
     )
+    pipe3 = StableDiffusionXLPipeline.from_pretrained(
+        "cagliostrolab/animagine-xl-3.1",
+        torch_dtype=torch.float16,
+        use_safetensors=True,
+        add_watermarker=False,
+    )
+
     if ENABLE_CPU_OFFLOAD:
         pipe.enable_model_cpu_offload()
         pipe2.enable_model_cpu_offload()
+        pipe3.enable_model_cpu_offload()
     else:
         pipe.to(device)    
-        pipe2.to(device)    
+        pipe2.to(device)
+        pipe3.to(device)
         print("Loaded on Device!")
     
     if USE_TORCH_COMPILE:
         pipe.unet = torch.compile(pipe.unet, mode="reduce-overhead", fullgraph=True)
         pipe2.unet = torch.compile(pipe2.unet, mode="reduce-overhead", fullgraph=True)
+        pipe3.unet = torch.compile(pipe3.unet, mode="reduce-overhead", fullgraph=True)
         print("Model Compiled!")
 
 def save_image(img):
@@ -162,31 +165,36 @@ def generate(
         "width": width,
         "height": height,
         "guidance_scale": guidance_scale,
-        "num_inference_steps": 25,
+        "num_inference_steps": 23,
         "generator": generator,
-        "num_images_per_prompt": NUM_IMAGES_PER_PROMPT,
+        "num_images_per_prompt": 1,  # Set to generate 1 image per model
         "use_resolution_binning": use_resolution_binning,
         "output_type": "pil",
     }
     
-    images = pipe(**options).images + pipe2(**options).images
+    # Generate one image from each model
+    image1 = pipe(**options).images[0]
+    image2 = pipe2(**options).images[0]
+    image3 = pipe3(**options).images[0]
+
+    images = [image1, image2, image3]
 
     image_paths = [save_image(img) for img in images]
     return image_paths, seed
 
 examples = [
-    "A closeup of a cat, a window, in a rustic cabin, close up, with a shallow depth of field, with a vintage film grain, in the style of Annie Leibovitz and in the style of Wes Anderson. --ar 85:128 --v 6.0 --style raw",
-    "Daria Morgendorffer the main character of the animated series Daria, serious expression, very excites sultry look, so hot girl, beautiful charismatic girl, so hot shot, a woman wearing eye glasses, gorgeous figure, interesting shapes, life-size figures",
-    "Dark green large leaves of anthurium, close up, photography, aerial view, in the style of unsplash, hasselblad h6d400c  --ar 85:128 --v 6.0 --style raw",
-    "Closeup of blonde woman depth of field, bokeh, shallow focus, minimalism, fujifilm xh2s with Canon EF lens, cinematic --ar 85:128 --v 6.0 --style raw"
+    "A blurry photo of mustang, with orange and yellow colors and a blurred background. Silhouettes of mountains in the foreground against a beautiful sunset. High resolution, captured with a Canon EOS R5 at F8 and ISO2. No people are depicted. --ar 128:85 --v 6.0 --style raw",
+    "Child in the style of bold character designs, interactive, hannah yata, light sky and pink, bold colorism, storybook-like, animated gifs ",
+    "Food photography of a milk shake with flying strawberrys against a pink background, professionally studio shot with cinematic lighting. The image is in the style of a professional studio shot --ar 85:128 --v 6.0 --style raw",
+    "Masterpiece, best quality, 1girl, solo, (loli, child), blue hair, ponytail hair, [pink|blue] eyes, white theme, blue theme, white T-shirt, shorts, medium breast, navel, (sky, sunlight, ocean, from below:1.36), standing, cowboy shot, <lora:add_detail:1>, 8k, UHD, HDR,(Masterpiece:1.5), (best quality:1.5)"
 ]
 
 css = '''
-.gradio-container{max-width: 560px !important}
+.gradio-container{max-width: 600px !important}
 h1{text-align:center}
 '''
-with gr.Blocks(css=css, theme="xiaobaiyuan/theme_brief") as demo:
-    gr.Markdown(DESCRIPTION)
+with gr.Blocks(css=css, theme="bethecloud/storj_theme") as demo:
+    gr.Markdown(DESCRIPTIONx)
     gr.DuplicateButton(
         value="Duplicate Space for private use",
         elem_id="duplicate-button",
@@ -203,22 +211,24 @@ with gr.Blocks(css=css, theme="xiaobaiyuan/theme_brief") as demo:
             )
             run_button = gr.Button("Run")
         result = gr.Gallery(label="Result", columns=1, preview=True)
-    with gr.Accordion("Advanced options", open=False):
-        use_negative_prompt = gr.Checkbox(label="Use negative prompt", value=True, visible=True)
-        negative_prompt = gr.Text(
-            label="Negative prompt",
-            max_lines=1,
-            placeholder="Enter a negative prompt",
-            value="(deformed iris, deformed pupils, semi-realistic, cgi, 3d, render, sketch, cartoon, drawing, anime:1.4), text, close up, cropped, out of frame, worst quality, low quality, jpeg artifacts, ugly, duplicate, morbid, mutilated, extra fingers, mutated hands, poorly drawn hands, poorly drawn face, mutation, deformed, blurry, dehydrated, bad anatomy, bad proportions, extra limbs, cloned face, disfigured, gross proportions, malformed limbs, missing arms, missing legs, extra arms, extra legs, fused fingers, too many fingers, long neck",
-            visible=True,
-        )
+    with gr.Accordion("Advanced Options", open=False, visible=False ):
+        with gr.Row():
+            use_negative_prompt = gr.Checkbox(label="Use Negative Prompt", value=True)
+            negative_prompt = gr.Text(
+                label="Negative Prompt",
+                show_label=False,
+                max_lines=1,
+                placeholder="Enter a negative prompt",
+                value="(deformed iris, deformed pupils, semi-realistic, cgi, 3d, render, sketch, cartoon, drawing), text, close up, cropped, out of frame, worst quality, low quality, jpeg artifacts, ugly, duplicate, morbid, mutilated, extra fingers, mutated hands, poorly drawn hands, poorly drawn face, mutation, deformed, blurry, dehydrated, bad anatomy, bad proportions, extra limbs, cloned face, disfigured, gross proportions, malformed limbs, missing arms, missing legs, extra arms, extra legs, fused fingers, too many fingers, long neck",
+                visible=True,
+            )
         with gr.Row():
             num_inference_steps = gr.Slider(
                 label="Steps",
                 minimum=10,
                 maximum=60,
                 step=1,
-                value=30,
+                value=23,
             )
         with gr.Row():
             num_images_per_prompt = gr.Slider(
@@ -226,7 +236,8 @@ with gr.Blocks(css=css, theme="xiaobaiyuan/theme_brief") as demo:
                 minimum=1,
                 maximum=5,
                 step=1,
-                value=2,
+                value=3,  # Set default to 3 images
+                visible=False,  # Hide this slider since we are fixing the value to 3 images
             )
         seed = gr.Slider(
             label="Seed",
@@ -260,7 +271,7 @@ with gr.Blocks(css=css, theme="xiaobaiyuan/theme_brief") as demo:
                 step=0.1,
                 value=6,
             )
-    with gr.Row(visible=True):
+    with gr.Row(visible=False):
         style_selection = gr.Radio(
             show_label=True,
             container=True,
@@ -305,6 +316,9 @@ with gr.Blocks(css=css, theme="xiaobaiyuan/theme_brief") as demo:
         outputs=[result, seed],
         api_name="run",
     )
+
+
+    gr.Markdown("⚠️ users are accountable for the content they generate and are responsible for ensuring it meets appropriate ethical standards.")
 
 if __name__ == "__main__":
     demo.queue(max_size=20).launch()
