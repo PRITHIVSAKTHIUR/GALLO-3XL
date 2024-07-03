@@ -1,5 +1,5 @@
 ---
-title: GALLO-3L
+title: GALLO-3xL
 emoji: 🍪🌌
 colorFrom: purple
 colorTo: red
