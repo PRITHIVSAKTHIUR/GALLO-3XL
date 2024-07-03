@@ -1,5 +1,5 @@
 ---
-title: DALL-E
+title: GALLO-3L
 emoji: 🍪🌌
 colorFrom: purple
 colorTo: red
@@ -11,7 +11,7 @@ license: creativeml-openrail-m
 short_description: Dall-e 3
 ---
 
-![alt text](assets/as.png)
+![alt text](assets/ww.gif)
 
 🚀Check out the configuration reference at https://huggingface.co/docs/hub/spaces-config-reference
 
