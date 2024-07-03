@@ -35,7 +35,7 @@ short_description: Dall-e 3
 
 ![alt text](assets/s1.png)
 
-## ✏️Processing with safetenors deployed
+## ✏️Processing on zero gpu
 
 ![alt text](assets/s2.png)
 
@@ -43,7 +43,7 @@ short_description: Dall-e 3
 
 ![alt text](assets/s3.png)
 
-## The Images from Dall-e 2k 🍪
+## The Images from Gallo 3XL🍪
 
 | ![Image 1](assets/d3.png) | ![Image 2](assets/2.png) |
 |---------------------------|--------------------------|
