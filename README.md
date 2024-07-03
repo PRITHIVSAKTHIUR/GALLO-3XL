@@ -1,5 +1,5 @@
 ---
-title: GALLO-3xL
+title: GALLO-3XL
 emoji: 🍪🌌
 colorFrom: purple
 colorTo: red
@@ -33,15 +33,15 @@ short_description: Dall-e 3
 
     Prompt: "a Viking ship sailing through a storm with lightning in the background"
 
-![alt text](assets/d1.png)
+![alt text](assets/s1.png)
 
 ## ✏️Processing with safetenors deployed
 
-![alt text](assets/d2.png)
+![alt text](assets/s2.png)
 
 ## 🌌The Generated Image Output
 
-![alt text](assets/d5.png)
+![alt text](assets/s3.png)
 
 ## The Images from Dall-e 2k 🍪
 
@@ -57,7 +57,7 @@ short_description: Dall-e 3
       transformers
       gradio
       peft
-
+-----------------------------------------------------------------
 .
 
 .
