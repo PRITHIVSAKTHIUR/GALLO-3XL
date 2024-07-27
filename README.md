@@ -8,7 +8,7 @@ sdk_version: 4.31.4
 app_file: app.py
 pinned: true
 license: creativeml-openrail-m
-short_description: Dall-e 3
+short_description: Dall-e 3 Like Space
 ---
 
 ![alt text](assets/ww.gif)
